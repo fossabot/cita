@@ -106,6 +106,27 @@ jobs:
     - <<: *stage-integrate-test-sha3-secp256k1
       name: Crosschain Test
       script: ./env.sh ./tests/integrate_test/cita_crosschain.sh
+    - <<: *stage-integrate-test-sha3-secp256k1
+      name: Transfer Value Test
+      script: ./env.sh ./tests/integrate_test/cita_charge_mode.sh
+    - <<: *stage-integrate-test-sha3-secp256k1
+      name: Box Executor Test
+      script: ./env.sh ./tests/integrate_test/box_executor_test.sh
+    - <<: *stage-integrate-test-sha3-secp256k1
+      name: Snapshot Test
+      script: ./env.sh ./tests/integrate_test/cita_snapshot_test.sh
+    - <<: *stage-integrate-test-sha3-secp256k1
+      name: Amend Test
+      script: ./env.sh ./tests/integrate_test/cita_amend_test.sh
+    - <<: *stage-integrate-test-sha3-secp256k1
+      name: Amend Test
+      script: ./env.sh ./tests/integrate_test/cita_amend_test.sh
+    - <<: *stage-integrate-test-sha3-secp256k1
+      name: Robustness Test
+      script: ./env.sh ./tests/integrate_test/robustness_test.py
+    - <<: *stage-integrate-test-sha3-secp256k1
+      name: Genesis Test
+      script: ./env.sh ./tests/compatibility/check_genesis.sh
 
     - &stage-contract-test-sha3-secp256k1
       <<: *stage-integrate-test-sha3-secp256k1
