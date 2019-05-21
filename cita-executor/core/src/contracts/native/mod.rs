@@ -17,6 +17,7 @@
 
 mod crosschain_verify;
 pub mod factory;
+mod rust_hello;
 #[cfg(test)]
 mod storage;
 #[cfg(feature = "privatetx")]

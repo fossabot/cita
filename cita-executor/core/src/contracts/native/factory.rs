@@ -79,6 +79,9 @@ impl Default for Factory {
         };
         // here we register contracts with addresses defined in genesis.json.
         {
+            use super::rust_hello::HelloWorld;
+            factory.register(Address::from(0x500), Box::new(HelloWorld::default()));
+
             use super::crosschain_verify::CrossChainVerify;
             factory.register(
                 Address::from_str(reserved_addresses::NATIVE_CROSS_CHAIN_VERIFY).unwrap(),
