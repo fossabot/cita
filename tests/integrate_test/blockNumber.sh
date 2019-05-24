@@ -9,12 +9,11 @@ fi
 if [ ! -n "$PORT" ]; then
     PORT=1337
 fi
-response=$(curl -s -X POST -d '{"jsonrpc":"2.0","method":"blockNumber","params":[],"id":2}' $IP:$PORT)
-if [ $? -ne 0 ]; then
+if response=$(curl -s -X POST -d '{"jsonrpc":"2.0","method":"blockNumber","params":[],"id":2}' $IP:$PORT); then
     exit 1
 fi
 
-height=$(echo ${response}|jq ".result"|sed 's/\"//g')
+height=$(echo "${response}"|jq ".result"|sed 's/\"//g')
 
 if [ "$height" == null ]; then
    exit 1

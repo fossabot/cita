@@ -2,13 +2,7 @@
 
 # Set bash environment
 set -e
-SOURCE_DIR=$(cd $(dirname "$0")/../..; pwd)
-if [[ `uname` == 'Darwin' ]]
-then
-    SED="gsed"
-else
-    SED="sed"
-fi
+SOURCE_DIR=$(cd "$(dirname "$0")"/../..; pwd)
 
 # Set CITA system environment
 BINARY_DIR=${SOURCE_DIR}/target/install
@@ -17,6 +11,7 @@ SUPER_ADMIN="0x4b5ae4567ad5d9fb92bc9afd6a657e6fa13a2523"
 
 ################################################################################
 echo "0) Prepare ..."
+# shellcheck source=/dev/null
 source "${SOURCE_DIR}/tests/integrate_test/util.sh"
 cd "${BINARY_DIR}"
 echo "DONE"
@@ -28,15 +23,15 @@ echo "DONE"
 
 ################################################################################
 echo "2) Generate CITA configurations ..."
-${BINARY_DIR}/scripts/create_cita_config.py create \
+"${BINARY_DIR}"/scripts/create_cita_config.py create \
     --nodes "127.0.0.1:4000" \
     --super_admin "${SUPER_ADMIN}"
 echo "DONE"
 
 ################################################################################
 echo "3) Run node-0"
-${BINARY_DIR}/bin/cita bebop setup ${CHAIN_NAME}/0 > /dev/null
-${BINARY_DIR}/bin/cita bebop start ${CHAIN_NAME}/0 trace
+"${BINARY_DIR}"/bin/cita bebop setup ${CHAIN_NAME}/0 > /dev/null
+"${BINARY_DIR}"/bin/cita bebop start ${CHAIN_NAME}/0 trace
 echo "DONE"
 
 sleep 10
@@ -44,14 +39,14 @@ sleep 10
 ################################################################################
 echo "4) Check node grow up ..."
 echo "chech_height_growth_normal 0 ..."
-timeout=`check_height_growth_normal 0 15`||(echo "FAILED"
-                                              echo "error msg: ${timeout}"
-                                              exit 1)
+timeout=$(check_height_growth_normal 0 15) || (echo "FAILED"
+                                               echo "error msg: ${timeout}"
+                                               exit 1)
 echo "${timeout}s DONE"
 
 ################################################################################
 echo "5) Amend chain name ..."
-cd ${BINARY_DIR}/scripts/txtool/txtool
+cd "${BINARY_DIR}"/scripts/txtool/txtool
 
 curl -X POST --data '{"jsonrpc":"2.0","method":"getMetaData","params":["latest"],"id":1}' 127.0.0.1:1337 \
  | grep "\"chainName\"\:\"test-chain\""
@@ -71,7 +66,7 @@ curl -X POST --data '{"jsonrpc":"2.0","method":"getMetaData","params":["latest"]
 
 ################################################################################
 echo "6) Amend abi ..."
-cd ${BINARY_DIR}/scripts/txtool/txtool
+cd "${BINARY_DIR}"/scripts/txtool/txtool
 
 # set abi of 0xffffffffffffffffffffffffffffffffff020000 as "amendabitest"
 python3 make_tx.py \
@@ -90,7 +85,7 @@ curl -X POST --data '{"jsonrpc":"2.0","method":"getAbi","params":["0xfffffffffff
 
 ################################################################################
 echo "7) Amend balance ..."
-cd ${BINARY_DIR}/scripts/txtool/txtool
+cd "${BINARY_DIR}"/scripts/txtool/txtool
 
 # set balance of 0xffffffffffffffffffffffffffffffffff020000 as 1234(0x4d2)
 python3 make_tx.py \
@@ -109,7 +104,7 @@ curl -X POST --data '{"jsonrpc":"2.0","method":"getBalance","params":["0xfffffff
 
 ################################################################################
 echo "8) Amend code ..."
-cd ${BINARY_DIR}/scripts/txtool/txtool
+cd "${BINARY_DIR}"/scripts/txtool/txtool
 
 # set code of 0xffffffffffffffffffffffffffffffffff020004 as "deadbeef"
 python3 make_tx.py \
@@ -128,8 +123,8 @@ curl -X POST --data '{"jsonrpc":"2.0","method":"getCode","params":["0xffffffffff
 
 ################################################################################
 echo "9) Clean Up ..."
-cd ${BINARY_DIR}
-${BINARY_DIR}/bin/cita bebop stop ${CHAIN_NAME}/0
+cd "${BINARY_DIR}"
+"${BINARY_DIR}"/bin/cita bebop stop ${CHAIN_NAME}/0
 
 cleanup
 echo "DONE"

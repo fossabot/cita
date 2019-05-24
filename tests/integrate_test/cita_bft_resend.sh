@@ -2,13 +2,11 @@
 
 # Set bash environment
 set -e
-if [[ `uname` == 'Darwin' ]]
+if [[ $(uname) == 'Darwin' ]]
 then
-    SOURCE_DIR=$(realpath $(dirname $0)/../..)
-    SED="gsed"
+    SOURCE_DIR=$(realpath "$(dirname "$0")"/../..)
 else
-    SOURCE_DIR=$(readlink -f $(dirname $0)/../..)
-    SED="sed"
+    SOURCE_DIR=$(readlink -f "$(dirname "$0")"/../..)
 fi
 
 # Set CITA system environment
@@ -18,6 +16,7 @@ SUPER_ADMIN="0x4b5ae4567ad5d9fb92bc9afd6a657e6fa13a2523"
 
 ################################################################################
 echo "0) Prepare ..."
+# shellcheck source=/dev/null
 source "${SOURCE_DIR}/tests/integrate_test/util.sh"
 cd "${BINARY_DIR}"
 echo "DONE"
@@ -29,7 +28,7 @@ echo "DONE"
 
 ################################################################################
 echo "2) Generate CITA configurations ..."
-${BINARY_DIR}/scripts/create_cita_config.py create \
+"${BINARY_DIR}"/scripts/create_cita_config.py create \
     --nodes "127.0.0.1:4000" \
     --super_admin "${SUPER_ADMIN}" \
     --chain_name "${CHAIN_NAME}" \
@@ -38,20 +37,20 @@ echo "DONE"
 
 ################################################################################
 echo "3) Start CITA components manually"
-${BINARY_DIR}/bin/cita bebop setup ${CHAIN_NAME}/0
-${BINARY_DIR}/bin/cita bebop start ${CHAIN_NAME}/0 trace
+"${BINARY_DIR}"/bin/cita bebop setup ${CHAIN_NAME}/0
+"${BINARY_DIR}"/bin/cita bebop start ${CHAIN_NAME}/0
 sleep 3
-${BINARY_DIR}/bin/cita bebop stop ${CHAIN_NAME}/0
+"${BINARY_DIR}"/bin/cita bebop stop ${CHAIN_NAME}/0
 
 cd ${CHAIN_NAME}/0
-${BINARY_DIR}/bin/cita-auth -c auth.toml & auth_pid=$!
-${BINARY_DIR}/bin/cita-bft -c consensus.toml -p privkey & bft_pid=$!
-${BINARY_DIR}/bin/cita-chain -c chain.toml & chain_pid=$i
-${BINARY_DIR}/bin/cita-executor -c executor.toml & executor_pid=$!
-${BINARY_DIR}/bin/cita-jsonrpc -c jsonrpc.toml & jsonrpc_pid=$!
-${BINARY_DIR}/bin/cita-network -c network.toml & network_pid=$!
+"${BINARY_DIR}"/bin/cita-auth -c auth.toml & auth_pid=$!
+"${BINARY_DIR}"/bin/cita-bft -c consensus.toml -p privkey & bft_pid=$!
+"${BINARY_DIR}"/bin/cita-chain -c chain.toml & chain_pid=$!
+"${BINARY_DIR}"/bin/cita-executor -c executor.toml & executor_pid=$!
+"${BINARY_DIR}"/bin/cita-jsonrpc -c jsonrpc.toml & jsonrpc_pid=$!
+"${BINARY_DIR}"/bin/cita-network -c network.toml & network_pid=$!
 wait_timeout=30
-timeout=`check_height_growth_normal 0 $wait_timeout` || (echo "FAILED"
+timeout=$(check_height_growth_normal 0 $wait_timeout) || (echo "FAILED"
                                                          echo "error msg: ${timeout}"
                                                          exit 1)
 
@@ -65,15 +64,15 @@ sleep 10
 
 ################################################################################
 echo "5) Restart CITA"
-kill ${auth_pid} ${bft_pid} ${jsonrpc_pid} ${network_pid}
+kill ${auth_pid} ${bft_pid} ${jsonrpc_pid} ${network_pid} ${chain_pid} ${executor_pid}
 
-cd ${BINARY_DIR}
-${BINARY_DIR}/bin/cita bebop start ${CHAIN_NAME}/0 trace
+cd "${BINARY_DIR}"
+"${BINARY_DIR}"/bin/cita bebop start ${CHAIN_NAME}/0
 
 wait_timeout=30
-timeout=`check_height_growth_normal 0 $wait_timeout` || (echo "FAILED"
-                                                         echo "error msg: ${timeout}"
-                                                         exit 1)
+timeout=$(check_height_growth_normal 0 $wait_timeout) || (echo "FAILED"
+                                                          echo "error msg: ${timeout}"
+                                                          exit 1)
 
 
 ################################################################################

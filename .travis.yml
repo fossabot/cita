@@ -22,7 +22,7 @@ jobs:
     - stage: CheckShell
       script:
         # Fail if any of these files have warnings
-        - shellcheck scripts/*.sh env.sh
+        - shellcheck scripts/*.sh tests/integrate_test/*.sh env.sh
 
     - stage: Release
       name: Release for Integrate Test

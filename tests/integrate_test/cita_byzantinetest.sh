@@ -2,22 +2,23 @@
 set -e
 
 ECONOMICAL_MODEL="0"
-if [ -n $1 ] && [ "$1" = "charge" ]; then
+if [ -n "$1" ] && [ "$1" = "charge" ]; then
     ECONOMICAL_MODEL="1"
 fi
 
-if [[ `uname` == 'Darwin' ]]
+if [[ $(uname) == 'Darwin' ]]
 then
-    SOURCE_DIR=$(realpath $(dirname $0)/../..)
+    SOURCE_DIR=$(realpath "$(dirname "$0")"/../..)
 else
-    SOURCE_DIR=$(readlink -f $(dirname $0)/../..)
+    SOURCE_DIR=$(readlink -f "$(dirname "$0")"/../..)
 fi
 BINARY_DIR=${SOURCE_DIR}/target/install
 
 ################################################################################
 echo -n "0) prepare  ...  "
+# shellcheck source=/dev/null
 . ${SOURCE_DIR}/tests/integrate_test/util.sh
-cd ${BINARY_DIR}
+cd "${BINARY_DIR}"
 echo "DONE"
 
 ################################################################################
@@ -57,10 +58,10 @@ echo "${timeout}s DONE"
 echo "5) set delay at one nodes, , output time used for produce block growth"
 delay=10000
 for i in {0..3}; do
-    id=$(($i%4))
+    id=$((i%4))
     echo -n "set delay at node ${id} ... "
-    refer=$((($i+1)%4))
-    port=$((4000+${id}))
+    refer=$(((i+1)%4))
+    port=$((4000+id))
     set_delay_at_port ${port} ${delay}
     timeout1=$(check_height_growth_normal ${refer} 60) ||(echo "FAILED"
                                                          echo "failed to check_height_growth: ${timeout1}"
@@ -78,17 +79,17 @@ echo "6) set delay at two nodes, output time used for produce block"
 delay=3000
 for i in {0..3}; do
     id1=$i
-    id2=$((($i+1)%4))
-    refer=$((($i+2)%4))
+    id2=$(((i+1)%4))
+    refer=$(((i+2)%4))
     echo -n "set delay=${delay} at nodes ${id1},${id2} ... "
-    set_delay_at_port $((4000+${id1})) ${delay}
-    set_delay_at_port $((4000+${id2})) ${delay}
+    set_delay_at_port $((4000+id1)) ${delay}
+    set_delay_at_port $((4000+id2)) ${delay}
 
     timeout1=$(check_height_growth_normal ${refer} 100) ||(echo "FAILED"
                                                           echo "failed to check_height_growth ${refer}: ${timeout1}"
                                                           exit 1)
-    unset_delay_at_port $((4000+${id1}))
-    unset_delay_at_port $((4000+${id2}))
+    unset_delay_at_port $((4000+id1))
+    unset_delay_at_port $((4000+id2))
     sleep 3
     timeout=$(check_height_growth_normal ${refer} 100) ||(echo "FAILED"
                                                         echo "failed to check_height_growth ${refer}: ${timeout}"
@@ -112,13 +113,13 @@ for i in {0..6}; do
                                                   exit 1)
     echo -n "set delay=${delay} ... "
     for node in {0..3} ; do
-        set_delay_at_port $((4000+${node})) ${delay}
+        set_delay_at_port $((4000+node)) ${delay}
     done
     timeout=$(check_height_growth_normal 0 60) ||(echo "FAILED"
                                                   echo "failed to check_height_growth: ${timeout}"
                                                   exit 1)
     for node in {0..3} ; do
-        unset_delay_at_port $((4000+${node}))
+        unset_delay_at_port $((4000+node))
     done
     sleep 4
     echo "${timeout}s DONE"

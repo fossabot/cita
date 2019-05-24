@@ -1,18 +1,19 @@
 #!/bin/bash
 set -e
 
-if [[ `uname` == 'Darwin' ]]
+if [[ $(uname) == 'Darwin' ]]
 then
-    SOURCE_DIR=$(realpath $(dirname $0)/../..)
+    SOURCE_DIR=$(realpath "$(dirname "$0")"/../..)
 else
-    SOURCE_DIR=$(readlink -f $(dirname $0)/../..)
+    SOURCE_DIR=$(readlink -f "$(dirname "$0")"/../..)
 fi
 BINARY_DIR=${SOURCE_DIR}/target/install
 
 ################################################################################
 echo -n "0) prepare  ...  "
+# shellcheck source=/dev/null
 . ${SOURCE_DIR}/tests/integrate_test/util.sh
-cd ${BINARY_DIR}
+cd "${BINARY_DIR}"
 echo "DONE"
 
 ################################################################################
@@ -75,9 +76,7 @@ echo "${timeout}s DONE"
 
 ################################################################################
 echo -n "8) start node3, check synch  ...  "
-node0_height=$(get_height 0)
-
-if [ $? -ne 0 ] ; then
+if node0_height=$(get_height 0); then
     echo "failed to get_height: ${node0_height}"
     exit 1
 fi
@@ -89,8 +88,7 @@ echo "${timeout}s DONE"
 
 ################################################################################
 echo -n "9) stop all nodes, check height changed after restart  ...  "
-before_height=$(get_height 0)
-if [ $? -ne 0 ] ; then
+if before_height=$(get_height 0); then
     echo "failed to get_height: ${before_height}"
     exit 1
 fi
@@ -107,7 +105,7 @@ timeout=$(check_height_growth_normal 0 300) || (echo "FAILED"
                                                exit 1)
 after_height=$(get_height 0)|| (echo "failed to get_height: ${after_height}"
                                 exit 1)
-if [ $after_height -le $before_height ]; then
+if [ "$after_height" -le "$before_height" ]; then
     echo "FAILED"
     echo "before:${before_height} after:${after_height}"
     exit 1

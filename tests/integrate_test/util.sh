@@ -1,10 +1,11 @@
+#!/bin/bash
 
 sudo(){
     set -o noglob
     if [ "$(whoami)" == "root" ] ; then
-        $*
+        "$@"
     else
-        /usr/bin/sudo $*
+        /usr/bin/sudo "$@"
     fi
     set +o noglob
 }
@@ -12,17 +13,18 @@ sudo(){
 # Clean up only when it successes
 cleanup() {
     for pid in cita-forever cita-jsonrpc cita-auth cita-chain cita-network cita-bft trans_evm cita-executor; do
-        ps ax | grep ${pid} | grep -v grep | awk '{print $1}' | xargs -n 1 -I %  kill -9 % 2>&1 >/dev/null ||true
+        pgrep -f ${pid} | awk '{print $1}' | xargs -n 1 -I %  kill -9 % >/dev/null 2>&1 || true
     done
 
-    rm -rf ${BINARY_DIR}/${1:-node}*
-    rm -rf ${BINARY_DIR}/*.json
+    rm -rf "${BINARY_DIR}"/"${1:-node}"*
+    rm -rf "${BINARY_DIR}"/*.json
     sudo tc qdisc del dev lo root> /dev/null 2>&1||true
 
     pid_file=/tmp/cita_basic-trans_evm.pid
     if [ -e ${pid_file} ] ; then
-        for pid in $(cat ${pid_file}) ; do
-            kill -9 ${pid}  2>&1 > /dev/null || true
+        while IFS= read -r pid < ${pid_file}
+        do
+            kill -9 "${pid}"  > /dev/null 2>&1 || true
         done
     fi
 }
@@ -36,10 +38,9 @@ get_height(){
     timeout=60                  # 60 seconds
     start=$(date +%s)
 
-    while [ 1 ] ; do
-        height=$(${SOURCE_DIR}/tests/integrate_test/blockNumber.sh 127.0.0.1 $((1337+${id})))
-        if [ $? -eq 0 ] ; then
-            echo ${height}
+    while true ; do
+        if height=$("${SOURCE_DIR}"/tests/integrate_test/blockNumber.sh 127.0.0.1 $((1337+id))); then
+            echo "${height}"
             return 0
         fi
 
@@ -62,13 +63,12 @@ get_peer_count(){
     timeout=60                  # 60 seconds
     start=$(date +%s)
 
-    while [ 1 ] ; do
-        peer_count=$(${SOURCE_DIR}/tests/integrate_test/peerCount.sh 127.0.0.1 $((1337+${id})))
-        if [ $? -eq 0 ] ; then
+    while true ; do
+        if peer_count=$("${SOURCE_DIR}"/tests/integrate_test/peerCount.sh 127.0.0.1 $((1337+id))); then
             # Remove quotes
-            peer_count_str=`echo ${peer_count} | sed 's/\"//g'`
+            peer_count_str="${peer_count}//\"/"
 
-            echo ${peer_count_str}
+            echo "${peer_count_str}"
             return 0
         fi
 
@@ -90,25 +90,23 @@ check_height_growth () {
     fi
     id=$1
     timeout=$2                 # seconds
-    old=$(get_height ${id})
-    if [[ $? -ne 0 ]]; then
+    if old=$(get_height "${id}"); then
         echo "failed to get_height(old): ${old}"
         return 1
     fi
     start=$(date +%s)
-    while [ 1 ] ; do
-        new=$(get_height ${id})
-        if [[ $? -ne 0 ]] ; then
+    while true ; do
+        if new=$(get_height "${id}"); then
             echo "failed to get_height! old height: ${old} new height: ${new}"
             return 1
         fi
 
         now=$(date +%s)
-        if [ ${new} -gt $(($old + 2)) ]; then
+        if [ "${new}" -gt $(("$old" + 2)) ]; then
             echo "$((now-start))"
             return 0
         fi
-        if [ $((now-start)) -gt ${timeout} ] ; then
+        if [ $((now-start)) -gt "${timeout}" ] ; then
             echo "time used: $((now-start)) old height: ${old} new height: ${new}"
             return 20
         fi
@@ -127,14 +125,9 @@ check_peer_count () {
     expected_count=$2
     timeout=$3                # seconds
 
-    if [[ $? -ne 0 ]]; then
-        echo "failed to get_height(old): ${old}"
-        return 1
-    fi
     start=$(date +%s)
-    while [ 1 ] ; do
-        peer_count=$(get_peer_count ${id})
-        if [[ $? -ne 0 ]] ; then
+    while true ; do
+        if peer_count=$(get_peer_count "${id}"); then
             echo "failed to get_peer_count! node id: ${id} expected count: ${expected_count}"
             return 1
         fi
@@ -144,7 +137,7 @@ check_peer_count () {
             echo "$((now-start))"
             return 0
         fi
-        if [ $((now-start)) -gt ${timeout} ] ; then
+        if [ $((now-start)) -gt "${timeout}" ] ; then
             echo "time used: $((now-start)) get peer count: ${peer_count} expected count: ${expected_count}"
             return 1
         fi
@@ -163,14 +156,9 @@ check_peer_count_max () {
     max_count=$2
     timeout=$3                # seconds
 
-    if [[ $? -ne 0 ]]; then
-        echo "failed to get_height(old): ${old}"
-        return 1
-    fi
     start=$(date +%s)
-    while [ 1 ] ; do
-        peer_count=$(get_peer_count ${id})
-        if [[ $? -ne 0 ]] ; then
+    while true ; do
+        if peer_count=$(get_peer_count "${id}"); then
             echo "failed to get_peer_count! node id: ${id} expected count: ${expected_count}"
             return 1
         fi
@@ -180,7 +168,7 @@ check_peer_count_max () {
             echo "$((now-start))"
             return 0
         fi
-        if [ $((now-start)) -gt ${timeout} ] ; then
+        if [ $((now-start)) -gt "${timeout}" ] ; then
             echo "time used: $((now-start)) get peer count: ${peer_count} expected count: ${expected_count}"
             return 1
         fi
@@ -199,9 +187,8 @@ check_height_growth_normal () {
     timeout=$2
     start=$(date +%s)
     for i in {0..1}; do
-        msg=$(check_height_growth ${id} ${timeout})
-        if [ $? -ne 0 ] ; then
-            echo "check_height_growth_normal failed id(${id}) timeout(${timeout}) msg(${msg})"
+        if msg=$(check_height_growth "${id}" "${timeout}"); then
+            echo "check_height_growth_normal failed id(${id}) timeout(${timeout}) msg(${msg}) after ${i}"
             return 1
         fi
         if [[ ${msg} -lt ${timeout} ]]; then
@@ -223,21 +210,19 @@ check_height_sync () {
     id=$1
     refer=$2
     timeout=180                  # seconds
-    refer_height=$(get_height ${refer})
-    if [ $? -ne 0 ] ; then
+    if refer_height=$(get_height "${refer}"); then
         echo "check_height_sync failed to get_height(refer): ${refer_height}"
         return 1
     fi
     start=$(date +%s)
 
-    while [ 1 ] ; do
-        height=$(get_height ${id})
-        if [ $? -ne 0 ] ; then
+    while true ; do
+        if height=$(get_height "${id}"); then
             echo "check_height_sync failed to get_height(sync): ${height}"
             return 1
         fi
         now=$(date +%s)
-        if [ ${height} -gt ${refer_height} ]; then
+        if [ "${height}" -gt "${refer_height}" ]; then
             echo "$((now-start))"
             return  0
         fi
@@ -258,25 +243,23 @@ check_height_stopped () {
     fi
     id=$1
     timeout=$2
-    old=$(get_height ${id})
-    if [ $? -ne 0 ] ; then
+    if old=$(get_height "${id}"); then
         echo "check_height_stopped failed to get_height(old): ${old}"
         return 1
     fi
 
     start=$(date +%s)
-    while [ 1 ] ; do
+    while true ; do
         now=$(date +%s)
-        if [ $((now-start)) -gt ${timeout} ] ; then
+        if [ $((now-start)) -gt "${timeout}" ] ; then
             echo "$((now-start))"
             return 0
         fi
-        new=$(get_height ${id})
-        if [ $? -ne 0 ] ; then
+        if new=$(get_height "${id}"); then
             echo "check_height_stopped failed to get_height(new): ${new}"
             return 1
         fi
-        if [ $new -gt $(($old + 2)) ]; then
+        if [ "$new" -gt $((old + 2)) ]; then
             # if two more blocks was generated, it shows cita still reach consensus.
             echo "check_height_stopped height change from ${old} to ${new}"
             return 1
@@ -295,8 +278,8 @@ set_delay_at_port() {
     delay=$2
     # TODO: need more description
     sudo tc qdisc  add dev lo root        handle  1:  prio bands 4                                         >/dev/null 2>&1 || true
-    sudo tc qdisc  add dev lo parent 1:4  handle 40:  netem delay ${delay}ms                               >/dev/null 2>&1 || true
-    sudo tc filter add dev lo protocol ip parent  1:0 prio 4 u32 match ip dport ${port} 0xffff flowid 1:4  >/dev/null 2>&1 || true
+    sudo tc qdisc  add dev lo parent 1:4  handle 40:  netem delay "${delay}"ms                               >/dev/null 2>&1 || true
+    sudo tc filter add dev lo protocol ip parent  1:0 prio 4 u32 match ip dport "${port}" 0xffff flowid 1:4  >/dev/null 2>&1 || true
 }
 unset_delay_at_port() {
     if [ $# -ne 1 ] ; then
@@ -310,17 +293,17 @@ unset_delay_at_port() {
 
 setup_node() {
     id=$1
-    ./bin/cita setup node/${id}
+    ./bin/cita setup node/"${id}"
 }
 
 start_node() {
     id=$1
-    ./bin/cita start node/${id} ${debug}
+    ./bin/cita start node/"${id}"
 }
 
 stop_node() {
     id=$1
-    ./bin/cita stop node/${id}
+    ./bin/cita stop node/"${id}"
 }
 
 stop_all () {
