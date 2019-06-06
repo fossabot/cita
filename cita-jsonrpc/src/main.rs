@@ -104,25 +104,25 @@ mod soliloquy;
 mod ws_handler;
 
 use clap::App;
-use config::{NewTxFlowConfig, ProfileConfig};
+use crate::config::{NewTxFlowConfig, ProfileConfig};
 use cpuprofiler::PROFILER;
-use fdlimit::set_fd_limit;
+use crate::fdlimit::set_fd_limit;
 use futures::Future;
-use http_server::Server;
+use crate::http_server::Server;
 use libproto::request::{self as reqlib, BatchRequest};
 use libproto::router::{MsgType, RoutingKey, SubModules};
 use libproto::Message;
 use libproto::TryInto;
 use pubsub::channel::{self, Sender};
 use pubsub::start_pubsub;
-use soliloquy::Soliloquy;
+use crate::soliloquy::Soliloquy;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, SystemTime};
 use util::{set_panic_handler, Mutex};
 use uuid::Uuid;
-use ws_handler::WsFactory;
+use crate::ws_handler::WsFactory;
 
 include!(concat!(env!("OUT_DIR"), "/build_info.rs"));
 
