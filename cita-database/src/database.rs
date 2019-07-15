@@ -18,14 +18,14 @@ pub enum DataCategory {
     Headers,
     // Block bodies
     Bodies,
-    // Extras: Block hash, receipt, and so on.
+    // Extras: Block hash, receipt, and so on
     Extra,
     // TBD. Traces
     Trace,
     // TBD. Empty accounts bloom filter
     AccountBloom,
-    // TODO Remove it. General information from the local node which can persist
-    NodeInfo,
+    // Keep it for compatibility
+    Other,
 }
 
 impl Error for DatabaseError {}

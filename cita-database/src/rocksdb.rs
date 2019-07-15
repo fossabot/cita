@@ -1,44 +1,109 @@
+#![allow(dead_code)]
+
 use std::default::Default;
 use std::path::Path;
 use std::sync::Arc;
 
 use crate::database::{DataCategory, Database, DatabaseError};
-use rocksdb::{BlockBasedOptions, ColumnFamily, Error as RocksError, Options, WriteBatch, DB};
+use rocksdb::{
+    BlockBasedOptions, ColumnFamily, DBCompactionStyle, Error as RocksError, Options, ReadOptions,
+    WriteBatch, WriteOptions, DB,
+};
+
+// Default config
+const BACKGROUND_FLUSHES: i32 = 2;
+const BACKGROUND_COMPACTIONS: i32 = 2;
+const WRITE_BUFFER_SIZE: usize = 4 * 64 * 1024 * 1024;
+
+// RocksDB columns
+/// For State
+const COL_STATE: &str = "col0";
+/// For Block headers
+const COL_HEADERS: &str = "col1";
+/// For Block bodies
+const COL_BODIES: &str = "col2";
+/// For Extras
+const COL_EXTRA: &str = "col3";
+/// For Traces
+const COL_TRACE: &str = "col4";
+/// TBD. For the empty accounts bloom filter.
+const COL_ACCOUNT_BLOOM: &str = "col5";
+const COL_OTHER: &str = "col6";
 
 pub struct RocksDB {
     db: Arc<DB>,
+    pub categorys: Vec<DataCategory>,
+    config: Config,
+    write_opts: WriteOptions,
+    read_opts: ReadOptions,
 }
 
-impl RocksDB {
-    /// Open database default
-    pub fn open_default<P: AsRef<Path>>(path: P) -> Result<Self, DatabaseError> {
-        let db = DB::open_default(path)
-            .map_err(|e| DatabaseError::Internal(e.to_string()))?;
+// rocksdb guarantees synchronization
+unsafe impl Sync for RocksDB {}
+unsafe impl Send for RocksDB {}
 
-        Ok(RocksDB { db: Arc::new(db) })
+impl RocksDB {
+    /// Open a rocksDB with default config.
+    pub fn open_default<P: AsRef<Path>>(path: P) -> Result<Self, DatabaseError> {
+        Self::open(path, &Config::default())
     }
 
-    /// Open database with config
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, DatabaseError> {
+    /// Open rocksDB with config.
+    pub fn open<P: AsRef<Path>>(path: P, config: &Config) -> Result<Self, DatabaseError> {
         let mut opts = Options::default();
+        opts.set_write_buffer_size(WRITE_BUFFER_SIZE);
+        opts.set_max_background_flushes(BACKGROUND_FLUSHES);
+        opts.set_max_background_compactions(BACKGROUND_COMPACTIONS);
         opts.create_if_missing(true);
-        opts.create_missing_column_families(true);
+
         let block_opts = BlockBasedOptions::default();
         opts.set_block_based_table_factory(&block_opts);
 
-        let columns = [
-            map_data_category(DataCategory::State),
-            map_data_category(DataCategory::Headers),
-            map_data_category(DataCategory::Bodies),
-            map_data_category(DataCategory::Extra),
-            map_data_category(DataCategory::Trace),
-            map_data_category(DataCategory::AccountBloom),
-            map_data_category(DataCategory::NodeInfo),
-        ];
-        let db = DB::open_cf(&opts, path, columns.iter())
-            .map_err(|e| DatabaseError::Internal(e.to_string()))?;
+        opts.set_max_open_files(config.max_open_files);
+        opts.set_use_fsync(false);
+        opts.set_compaction_style(DBCompactionStyle::Level);
+        opts.set_target_file_size_base(config.compaction.target_file_size_base);
+        if let Some(level_multiplier) = config.compaction.max_bytes_for_level_multiplier {
+            opts.set_max_bytes_for_level_multiplier(level_multiplier);
+        }
+        if let Some(compactions) = config.compaction.max_background_compactions {
+            opts.set_max_background_compactions(compactions);
+        }
 
-        Ok(RocksDB { db: Arc::new(db) })
+        let mut write_opts = WriteOptions::default();
+        if !config.wal {
+            write_opts.disable_wal(true);
+        }
+
+        let categorys = vec![
+            DataCategory::State,
+            DataCategory::Headers,
+            DataCategory::Bodies,
+            DataCategory::Extra,
+            DataCategory::Trace,
+            DataCategory::AccountBloom,
+            DataCategory::Other,
+        ];
+        let mut columns = vec![];
+        // TODO Use iterator
+        for category in categorys.clone() {
+            columns.push(map_data_category(category));
+        }
+
+        let db = if config.category_num.unwrap_or(0) == 0 {
+            DB::open(&opts, path).map_err(|e| DatabaseError::Internal(e.to_string()))?
+        } else {
+            DB::open_cf(&opts, path, columns.iter())
+                .map_err(|e| DatabaseError::Internal(e.to_string()))?
+        };
+
+        Ok(RocksDB {
+            db: Arc::new(db),
+            categorys: categorys.clone(),
+            write_opts,
+            read_opts: ReadOptions::default(),
+            config: config.clone(),
+        })
     }
 }
 
@@ -139,22 +204,8 @@ impl Database for RocksDB {
         Ok(())
     }
 }
-// Database categorys
-/// Column for State
-const COL_STATE: &str = "col0";
-/// Column for Block headers
-const COL_HEADERS: &str = "col1";
-/// Column for Block bodies
-const COL_BODIES: &str = "col2";
-/// Column for Extras
-const COL_EXTRA: &str = "col3";
-/// Column for Traces
-const COL_TRACE: &str = "col4";
-/// TBD Column for the empty accounts bloom filter.
-const COL_ACCOUNT_BLOOM: &str = "col5";
-/// TODO Remove it. Useless category.
-const COL_NODE_INFO: &str = "col6";
 
+// TODO generate columns from category_num: col0-col6
 fn map_data_category(category: DataCategory) -> &'static str {
     match category {
         DataCategory::State => COL_STATE,
@@ -163,7 +214,7 @@ fn map_data_category(category: DataCategory) -> &'static str {
         DataCategory::Extra => COL_EXTRA,
         DataCategory::Trace => COL_TRACE,
         DataCategory::AccountBloom => COL_ACCOUNT_BLOOM,
-        DataCategory::NodeInfo => COL_NODE_INFO,
+        DataCategory::Other => COL_OTHER,
     }
 }
 
@@ -174,4 +225,60 @@ fn map_db_err(err: RocksError) -> DatabaseError {
 fn get_column(db: &DB, category: DataCategory) -> Result<ColumnFamily, DatabaseError> {
     db.cf_handle(map_data_category(category))
         .ok_or(DatabaseError::NotFound)
+}
+
+/// RocksDB configuration
+/// TODO https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide
+#[derive(Clone)]
+pub struct Config {
+    /// WAL
+    pub wal: bool,
+    /// Number of categorys
+    pub category_num: Option<u32>,
+    /// Number of open files
+    pub max_open_files: i32,
+    /// About compaction
+    pub compaction: Compaction,
+    /// Good value for total_threads is the number of cores.
+    pub increase_parallelism: Option<i32>,
+}
+
+impl Config {
+    /// Create new `Config` with default parameters and specified set of category.
+    pub fn with_category_num(category_num: Option<u32>) -> Self {
+        let mut config = Self::default();
+        config.category_num = category_num;
+        config
+    }
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        Config {
+            wal: true,
+            category_num: None,
+            max_open_files: 512,
+            compaction: Compaction::default(),
+            increase_parallelism: None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Compaction {
+    /// L0-L1 target file size
+    pub target_file_size_base: u64,
+    pub max_bytes_for_level_multiplier: Option<f64>,
+    /// Sets the maximum number of concurrent background compaction jobs
+    pub max_background_compactions: Option<i32>,
+}
+
+impl Default for Compaction {
+    fn default() -> Compaction {
+        Compaction {
+            target_file_size_base: 64 * 1024 * 1024,
+            max_bytes_for_level_multiplier: None,
+            max_background_compactions: None,
+        }
+    }
 }
