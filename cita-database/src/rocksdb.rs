@@ -55,6 +55,8 @@ impl RocksDB {
         opts.set_max_background_flushes(BACKGROUND_FLUSHES);
         opts.set_max_background_compactions(BACKGROUND_COMPACTIONS);
         opts.create_if_missing(true);
+        // If true, any column families that didn't exist when opening the database will be created.
+        opts.create_missing_column_families(true);
 
         let block_opts = BlockBasedOptions::default();
         opts.set_block_based_table_factory(&block_opts);
@@ -84,6 +86,7 @@ impl RocksDB {
             DataCategory::AccountBloom,
             DataCategory::Other,
         ];
+
         let mut columns = vec![];
         // TODO Use iterator
         for category in categorys.clone() {
@@ -96,6 +99,7 @@ impl RocksDB {
             DB::open_cf(&opts, path, columns.iter())
                 .map_err(|e| DatabaseError::Internal(e.to_string()))?
         };
+        println!("open ok");
 
         Ok(RocksDB {
             db: Arc::new(db),
@@ -104,6 +108,23 @@ impl RocksDB {
             read_opts: ReadOptions::default(),
             config: config.clone(),
         })
+    }
+
+    #[cfg(test)]
+    fn clean(&self) {
+        let columns = [
+            map_data_category(DataCategory::State),
+            map_data_category(DataCategory::Headers),
+            map_data_category(DataCategory::Bodies),
+            map_data_category(DataCategory::Extra),
+            map_data_category(DataCategory::Trace),
+            map_data_category(DataCategory::AccountBloom),
+            map_data_category(DataCategory::Other),
+        ];
+
+        for col in columns.iter() {
+            self.db.drop_cf(col).unwrap();
+        }
     }
 }
 
@@ -280,5 +301,68 @@ impl Default for Compaction {
             max_bytes_for_level_multiplier: None,
             max_background_compactions: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test::{
+        contains, get, insert, insert_batch, remove, remove_batch,
+    };
+
+    use super::{Config, RocksDB};
+
+    #[test]
+    fn test_get() {
+        let cfg = Config::with_category_num(Some(7));
+        let db = RocksDB::open("rocksdb/test_get", &cfg).unwrap();
+
+        get(&db);
+        db.clean();
+    }
+
+    #[test]
+    fn test_insert() {
+        let cfg = Config::with_category_num(Some(7));
+        let db = RocksDB::open("rocksdb/test_insert", &cfg).unwrap();
+
+        insert(&db);
+        db.clean();
+    }
+
+    #[test]
+    fn test_insert_batch() {
+        let cfg = Config::with_category_num(Some(7));
+        let db = RocksDB::open("rocksdb/test_insert_batch", &cfg).unwrap();
+
+        insert_batch(&db);
+        db.clean();
+    }
+
+    #[test]
+    fn test_contain() {
+        let cfg = Config::with_category_num(Some(7));
+        let db = RocksDB::open("rocksdb/test_contain", &cfg).unwrap();
+
+        contains(&db);
+        db.clean()
+    }
+
+    #[test]
+    fn test_remove() {
+        let cfg = Config::with_category_num(Some(7));
+        let db = RocksDB::open("rocksdb/test_remove", &cfg).unwrap();
+
+        remove(&db);
+        db.clean();
+    }
+
+    #[test]
+    fn test_remove_batch() {
+        let cfg = Config::with_category_num(Some(7));
+        let db = RocksDB::open("rocksdb/test_remove_batch", &cfg).unwrap();
+
+        remove_batch(&db);
+        db.clean();
     }
 }
