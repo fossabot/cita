@@ -1,41 +1,21 @@
-#![allow(dead_code)]
-
 use std::default::Default;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::columns::map_columns;
+use crate::config::{Config, BACKGROUND_COMPACTIONS, BACKGROUND_FLUSHES, WRITE_BUFFER_SIZE};
 use crate::database::{DataCategory, Database, DatabaseError};
 use rocksdb::{
     BlockBasedOptions, ColumnFamily, DBCompactionStyle, Error as RocksError, Options, ReadOptions,
     WriteBatch, WriteOptions, DB,
 };
 
-// Default config
-const BACKGROUND_FLUSHES: i32 = 2;
-const BACKGROUND_COMPACTIONS: i32 = 2;
-const WRITE_BUFFER_SIZE: usize = 4 * 64 * 1024 * 1024;
-
-// RocksDB columns
-/// For State
-const COL_STATE: &str = "col0";
-/// For Block headers
-const COL_HEADERS: &str = "col1";
-/// For Block bodies
-const COL_BODIES: &str = "col2";
-/// For Extras
-const COL_EXTRA: &str = "col3";
-/// For Traces
-const COL_TRACE: &str = "col4";
-/// TBD. For the empty accounts bloom filter.
-const COL_ACCOUNT_BLOOM: &str = "col5";
-const COL_OTHER: &str = "col6";
-
 pub struct RocksDB {
     db: Arc<DB>,
     pub categorys: Vec<DataCategory>,
-    config: Config,
-    write_opts: WriteOptions,
-    read_opts: ReadOptions,
+    pub config: Config,
+    pub write_opts: WriteOptions,
+    pub read_opts: ReadOptions,
 }
 
 // rocksdb guarantees synchronization
@@ -87,19 +67,17 @@ impl RocksDB {
             DataCategory::Other,
         ];
 
-        let mut columns = vec![];
-        // TODO Use iterator
-        for category in categorys.clone() {
-            columns.push(map_data_category(category));
-        }
+        let columns: Vec<_> = (0..config.category_num.unwrap_or(0))
+            .map(|c| format!("col{}", c))
+            .collect();
+        let columns: Vec<&str> = columns.iter().map(|n| n as &str).collect();
+        debug!("[database] Columns: {:?}", columns);
 
-        let db = if config.category_num.unwrap_or(0) == 0 {
-            DB::open(&opts, path).map_err(|e| DatabaseError::Internal(e.to_string()))?
-        } else {
-            DB::open_cf(&opts, path, columns.iter())
-                .map_err(|e| DatabaseError::Internal(e.to_string()))?
+        let db = match config.category_num {
+            Some(_) => DB::open_cf(&opts, path, columns.iter())
+                .map_err(|e| DatabaseError::Internal(e.to_string()))?,
+            None => DB::open(&opts, path).map_err(|e| DatabaseError::Internal(e.to_string()))?,
         };
-        println!("open ok");
 
         Ok(RocksDB {
             db: Arc::new(db),
@@ -113,13 +91,13 @@ impl RocksDB {
     #[cfg(test)]
     fn clean(&self) {
         let columns = [
-            map_data_category(DataCategory::State),
-            map_data_category(DataCategory::Headers),
-            map_data_category(DataCategory::Bodies),
-            map_data_category(DataCategory::Extra),
-            map_data_category(DataCategory::Trace),
-            map_data_category(DataCategory::AccountBloom),
-            map_data_category(DataCategory::Other),
+            map_columns(DataCategory::State),
+            map_columns(DataCategory::Headers),
+            map_columns(DataCategory::Bodies),
+            map_columns(DataCategory::Extra),
+            map_columns(DataCategory::Trace),
+            map_columns(DataCategory::AccountBloom),
+            map_columns(DataCategory::Other),
         ];
 
         for col in columns.iter() {
@@ -226,91 +204,19 @@ impl Database for RocksDB {
     }
 }
 
-// TODO generate columns from category_num: col0-col6
-fn map_data_category(category: DataCategory) -> &'static str {
-    match category {
-        DataCategory::State => COL_STATE,
-        DataCategory::Headers => COL_HEADERS,
-        DataCategory::Bodies => COL_BODIES,
-        DataCategory::Extra => COL_EXTRA,
-        DataCategory::Trace => COL_TRACE,
-        DataCategory::AccountBloom => COL_ACCOUNT_BLOOM,
-        DataCategory::Other => COL_OTHER,
-    }
-}
-
 fn map_db_err(err: RocksError) -> DatabaseError {
     DatabaseError::Internal(err.to_string())
 }
 
 fn get_column(db: &DB, category: DataCategory) -> Result<ColumnFamily, DatabaseError> {
-    db.cf_handle(map_data_category(category))
+    db.cf_handle(map_columns(category))
         .ok_or(DatabaseError::NotFound)
-}
-
-/// RocksDB configuration
-/// TODO https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide
-#[derive(Clone)]
-pub struct Config {
-    /// WAL
-    pub wal: bool,
-    /// Number of categorys
-    pub category_num: Option<u32>,
-    /// Number of open files
-    pub max_open_files: i32,
-    /// About compaction
-    pub compaction: Compaction,
-    /// Good value for total_threads is the number of cores.
-    pub increase_parallelism: Option<i32>,
-}
-
-impl Config {
-    /// Create new `Config` with default parameters and specified set of category.
-    pub fn with_category_num(category_num: Option<u32>) -> Self {
-        let mut config = Self::default();
-        config.category_num = category_num;
-        config
-    }
-}
-
-impl Default for Config {
-    fn default() -> Config {
-        Config {
-            wal: true,
-            category_num: None,
-            max_open_files: 512,
-            compaction: Compaction::default(),
-            increase_parallelism: None,
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Compaction {
-    /// L0-L1 target file size
-    pub target_file_size_base: u64,
-    pub max_bytes_for_level_multiplier: Option<f64>,
-    /// Sets the maximum number of concurrent background compaction jobs
-    pub max_background_compactions: Option<i32>,
-}
-
-impl Default for Compaction {
-    fn default() -> Compaction {
-        Compaction {
-            target_file_size_base: 64 * 1024 * 1024,
-            max_bytes_for_level_multiplier: None,
-            max_background_compactions: None,
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::test::{
-        contains, get, insert, insert_batch, remove, remove_batch,
-    };
-
     use super::{Config, RocksDB};
+    use crate::test::{contains, get, insert, insert_batch, remove, remove_batch};
 
     #[test]
     fn test_get() {
