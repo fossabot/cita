@@ -8,4 +8,3 @@ pub(crate) mod test;
 
 #[macro_use]
 extern crate cita_logger as logger;
-

@@ -12,13 +12,12 @@ use rocksdb::{
 
 pub struct RocksDB {
     db: Arc<DB>,
-    pub categorys: Vec<DataCategory>,
     pub config: Config,
     pub write_opts: WriteOptions,
     pub read_opts: ReadOptions,
 }
 
-// rocksdb guarantees synchronization
+// RocksDB guarantees synchronization
 unsafe impl Sync for RocksDB {}
 unsafe impl Send for RocksDB {}
 
@@ -57,16 +56,6 @@ impl RocksDB {
             write_opts.disable_wal(true);
         }
 
-        let categorys = vec![
-            DataCategory::State,
-            DataCategory::Headers,
-            DataCategory::Bodies,
-            DataCategory::Extra,
-            DataCategory::Trace,
-            DataCategory::AccountBloom,
-            DataCategory::Other,
-        ];
-
         let columns: Vec<_> = (0..config.category_num.unwrap_or(0))
             .map(|c| format!("col{}", c))
             .collect();
@@ -81,7 +70,6 @@ impl RocksDB {
 
         Ok(RocksDB {
             db: Arc::new(db),
-            categorys: categorys.clone(),
             write_opts,
             read_opts: ReadOptions::default(),
             config: config.clone(),
@@ -90,15 +78,10 @@ impl RocksDB {
 
     #[cfg(test)]
     fn clean(&self) {
-        let columns = [
-            map_columns(DataCategory::State),
-            map_columns(DataCategory::Headers),
-            map_columns(DataCategory::Bodies),
-            map_columns(DataCategory::Extra),
-            map_columns(DataCategory::Trace),
-            map_columns(DataCategory::AccountBloom),
-            map_columns(DataCategory::Other),
-        ];
+        let columns: Vec<_> = (0..self.config.category_num.unwrap_or(0))
+            .map(|c| format!("col{}", c))
+            .collect();
+        let columns: Vec<&str> = columns.iter().map(|n| n as &str).collect();
 
         for col in columns.iter() {
             self.db.drop_cf(col).unwrap();
@@ -216,59 +199,75 @@ fn get_column(db: &DB, category: DataCategory) -> Result<ColumnFamily, DatabaseE
 #[cfg(test)]
 mod tests {
     use super::{Config, RocksDB};
-    use crate::test::{contains, get, insert, insert_batch, remove, remove_batch};
+    use crate::database::{DataCategory, Database, DatabaseError};
+    use crate::test::get_value;
 
     #[test]
-    fn test_get() {
-        let cfg = Config::with_category_num(Some(7));
-        let db = RocksDB::open("rocksdb/test_get", &cfg).unwrap();
+    fn test_insert_get_contains_remove() {
+        let cfg = Config::with_category_num(Some(1));
+        let db = RocksDB::open("rocksdb/test_get_insert_contains_remove", &cfg).unwrap();
 
-        get(&db);
+        let data = b"test".to_vec();
+        let none_exist = b"none_exist".to_vec();
+
+        // Get
+        assert_eq!(get_value(&db, "test"), Ok(None));
+        //Insert and get
+        db.insert(DataCategory::State, data.clone(), data.clone())
+            .unwrap();
+        assert_eq!(get_value(&db, "test"), Ok(Some(data.clone())));
+
+        // Contains
+        assert_eq!((&db).contains(DataCategory::State, &data), Ok(true));
+        assert_eq!((&db).contains(DataCategory::State, &none_exist), Ok(false));
+
+        // Remove
+        db.remove(DataCategory::State, &data).unwrap();
+        assert_eq!(get_value(&db, data), Ok(None));
+
         db.clean();
     }
 
     #[test]
-    fn test_insert() {
-        let cfg = Config::with_category_num(Some(7));
-        let db = RocksDB::open("rocksdb/test_insert", &cfg).unwrap();
+    fn test_batch_op() {
+        let cfg = Config::with_category_num(Some(1));
+        let db = RocksDB::open("rocksdb/test_batch_op", &cfg).unwrap();
 
-        insert(&db);
+        let data1 = b"test1".to_vec();
+        let data2 = b"test2".to_vec();
+        db.insert_batch(
+            DataCategory::State,
+            vec![data1.clone(), data2.clone()],
+            vec![data1.clone(), data2.clone()],
+        )
+        .unwrap();
+
+        // Insert batch
+        assert_eq!(get_value(&db, data1.clone()), Ok(Some(data1.clone())));
+        assert_eq!(get_value(&db, data2.clone()), Ok(Some(data2.clone())));
+
+        db.remove_batch(DataCategory::State, &[data1.clone(), data2.clone()])
+            .unwrap();
+
+        // Remove batch
+        assert_eq!(get_value(&db, data1), Ok(None));
+        assert_eq!(get_value(&db, data2), Ok(None));
+
         db.clean();
     }
 
     #[test]
-    fn test_insert_batch() {
-        let cfg = Config::with_category_num(Some(7));
-        let db = RocksDB::open("rocksdb/test_insert_batch", &cfg).unwrap();
+    fn test_insert_batch_error() {
+        let cfg = Config::with_category_num(Some(1));
+        let db = RocksDB::open("rocksdb/test_insert_batch_error", &cfg).unwrap();
 
-        insert_batch(&db);
-        db.clean();
-    }
+        let data = b"test".to_vec();
 
-    #[test]
-    fn test_contain() {
-        let cfg = Config::with_category_num(Some(7));
-        let db = RocksDB::open("rocksdb/test_contain", &cfg).unwrap();
+        match db.insert_batch(DataCategory::State, vec![data], vec![]) {
+            Err(DatabaseError::InvalidData) => (), // pass
+            _ => panic!("should return error DatabaseError::InvalidData"),
+        }
 
-        contains(&db);
-        db.clean()
-    }
-
-    #[test]
-    fn test_remove() {
-        let cfg = Config::with_category_num(Some(7));
-        let db = RocksDB::open("rocksdb/test_remove", &cfg).unwrap();
-
-        remove(&db);
-        db.clean();
-    }
-
-    #[test]
-    fn test_remove_batch() {
-        let cfg = Config::with_category_num(Some(7));
-        let db = RocksDB::open("rocksdb/test_remove_batch", &cfg).unwrap();
-
-        remove_batch(&db);
         db.clean();
     }
 }
