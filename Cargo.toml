@@ -1,7 +1,7 @@
 [workspace]
-members = ["cita-auth"
+members = [# "cita-auth"
 # ,"cita-jsonrpc"
-# ,"cita-chain"
+"cita-chain"
 # ,"cita-bft"
 # ,"cita-network"
 # ,"cita-executor"
