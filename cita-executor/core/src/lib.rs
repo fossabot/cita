@@ -28,7 +28,7 @@ extern crate rlp;
 #[macro_use]
 extern crate serde_derive;
 extern crate cita_merklehash;
-pub extern crate db as cita_db;
+pub extern crate cita_database as cita_db;
 extern crate hashable;
 #[cfg_attr(test, macro_use)]
 extern crate serde_json;
