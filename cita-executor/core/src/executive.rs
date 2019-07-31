@@ -526,7 +526,7 @@ impl<'a, B: 'a + StateBackend> Executive<'a, B> {
                 economical_model,
             );
 
-            scope.spawn(move || {
+            scope.spawn(move |_| {
                 vm_factory
                     .create(params.gas)
                     .exec(params, &mut ext)

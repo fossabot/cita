@@ -14,7 +14,7 @@ lru-cache = "0.1.1"
 lazy_static = "0.2"
 bit-set = "0.4"
 time = "0.1"
-crossbeam = "0.2"
+crossbeam = "0.7"
 transient-hashmap = "0.4.0"
 cita-logger = "0.1.0"
 libproto = { git = "https://github.com/cryptape/cita-common.git", branch = "develop" }
