@@ -1,6 +1,7 @@
 # <img src="https://github.com/cryptape/assets/blob/master/CITA-logo.png?raw=true" width="256">
 
 [![Build Status](https://travis-ci.org/cryptape/cita.svg?branch=develop)](https://travis-ci.org/cryptape/cita)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkaikai1024%2Fcita.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkaikai1024%2Fcita?ref=badge_shield)
 
 English | [简体中文](./README-CN.md)
 
@@ -65,6 +66,9 @@ Please check [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
 CITA is currently under the GPLv3 license. See the LICENSE file for details.
 
 **CITA will move to Apache 2.0 license soon.**
+
+
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkaikai1024%2Fcita.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkaikai1024%2Fcita?ref=badge_large)
 
 ## Credits
 
